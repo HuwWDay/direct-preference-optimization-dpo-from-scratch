@@ -302,8 +302,38 @@ def dpo_loss_grad(params, batch, ref_logprobs_batch, beta):
             
     return float(loss), grads
 
-# Step 18 - dpo_train_step (not yet solved)
-# TODO: implement
+# Step 18 - dpo_train_step
+import numpy as np
+
+def dpo_train_step(params, batch, ref_logprobs_batch, beta, learning_rate):
+    """
+    Executes one gradient-descent update of the policy under the DPO objective.
+    
+    Args:
+        params: dict of policy parameters ('embed', 'W_out', 'b_out')
+        batch: dict containing 'chosen_ids', 'rejected_ids', 'chosen_mask', 'rejected_mask'
+        ref_logprobs_batch: dict containing reference log-probs ('chosen', 'rejected')
+        beta: float, the KL regularization temperature
+        learning_rate: float, SGD step size
+        
+    Returns:
+        updated_params: dict containing the new policy parameters after the SGD step
+        metrics: dict containing scalar evaluation tracking metrics (e.g., {'loss': loss})
+    """
+    # 1. Compute the DPO loss and parameter gradients
+    loss, grads = dpo_loss_grad(params, batch, ref_logprobs_batch, beta)
+    
+    # 2. Apply a plain SGD update rule without mutating the original dictionary
+    updated_params = {}
+    for key in params.keys():
+        updated_params[key] = params[key] - learning_rate * grads[key]
+        
+    # 3. Package metrics tracking structure
+    metrics = {
+        'loss': float(loss)
+    }
+    
+    return updated_params, metrics
 
 # Step 19 - train_dpo (not yet solved)
 # TODO: implement
