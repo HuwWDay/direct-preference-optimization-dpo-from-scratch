@@ -56,8 +56,53 @@ def policy_sequence_logprob(params, token_ids, mask):
     token_logprobs = gather_token_logprobs(log_probs, token_ids)
     return masked_sequence_logprob(token_logprobs, mask)
 
-# Step 8 - sequence_logprob_grad (not yet solved)
-# TODO: implement
+# Step 8 - sequence_logprob_grad
+def sequence_logprob_grad(params, token_ids, mask):
+    # TODO: Compute gradients of the summed sequence log-probability w.r.t. params
+    
+    embed = params['embed']
+    W_out = params['W_out']
+    b_out = params['b_out']
+    
+    B, T = token_ids.shape
+    V = b_out.shape[0]
+    D = embed.shape[1]
+    
+    probs = softmax(policy_token_logits(params, token_ids))
+    # 2. Gradient w.r.t Logits
+    # Initialize with -P(j)
+    d_logits = -probs
+    # Add 1.0 for the actual target token positions
+    # Using advanced indexing to target the exact token positions
+    batch_idx = np.arange(B)[:, None]
+    time_idx = np.arange(T)
+    d_logits[batch_idx, time_idx, token_ids] += 1.0
+    
+    # Apply the sequence mask: shape (B, T, V)
+    d_logits *= mask[:, :, None]
+    
+    # 3. Gradients w.r.t Output Layer Parameters
+    # db_out sums over batch (0) and time (1) dimensions
+    db_out = np.sum(d_logits, axis=(0, 1))
+    h = embed[token_ids]
+    # dW_out is computed by reshaping to matrix dimensions and performing a dot product
+    h_flat = h.reshape(-1, D)
+    d_logits_flat = d_logits.reshape(-1, V)
+    dW_out = np.dot(h_flat.T, d_logits_flat)
+    
+    # 4. Gradient w.r.t Hidden States (Embeddings per token)
+    dh = np.dot(d_logits, W_out.T) # shape (B, T, D)
+    
+    # 5. Gradient w.r.t the Embedding Matrix
+    dembed = np.zeros_like(embed)
+    # Accumulate gradients into the embedding rows matching token_ids
+    np.add.at(dembed, token_ids, dh)
+    
+    return {
+        'embed': dembed,
+        'W_out': dW_out,
+        'b_out': db_out
+    }
 
 # Step 9 - bradley_terry_loss (not yet solved)
 # TODO: implement
