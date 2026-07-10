@@ -28,8 +28,10 @@ def gather_token_logprobs(log_probs, token_ids):
     expand = token_ids[:,:,np.newaxis]
     return np.take_along_axis(log_probs, expand, axis=-1).squeeze(-1)
 
-# Step 4 - masked_sequence_logprob (not yet solved)
-# TODO: implement
+# Step 4 - masked_sequence_logprob
+def masked_sequence_logprob(token_logprobs, mask):
+    # TODO: Sum per-token log-probabilities under a binary mask to obtain a single sequence log-probability per example.
+    return np.sum(token_logprobs*mask, axis=-1)
 
 # Step 5 - init_policy_params (not yet solved)
 # TODO: implement
