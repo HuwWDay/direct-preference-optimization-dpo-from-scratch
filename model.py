@@ -242,8 +242,65 @@ def dpo_loss(policy_logprob_chosen, policy_logprob_rejected, ref_logprob_chosen,
     margin = dpo_pair_margin(policy_logprob_chosen, policy_logprob_rejected, ref_logprob_chosen, ref_logprob_rejected, beta) 
     return float(np.mean(np.logaddexp(0.0, -margin)))
 
-# Step 17 - dpo_loss_grad (not yet solved)
-# TODO: implement
+# Step 17 - dpo_loss_grad
+import numpy as np
+
+def dpo_loss_grad(params, batch, ref_logprobs_batch, beta):
+    """
+    Evaluates the DPO logistic loss on one preference batch and returns 
+    parameter gradients for the policy.
+    
+    Args:
+        params: dict of policy parameters ('embed', 'W_out', 'b_out')
+        batch: dict containing 'chosen_ids', 'rejected_ids', 'chosen_mask', 'rejected_mask' arrays of shape (B, T)
+        ref_logprobs_batch: dict containing 'chosen' and 'rejected' reference log-probs of shape (B,)
+        beta: float, the KL regularization temperature
+        
+    Returns:
+        loss: ordinary Python float of the average DPO loss
+        grads: dict containing accumulated parameter gradients matching the shapes of params
+    """
+    # 1. Extract inputs
+    chosen_ids = batch['chosen_ids']
+    chosen_mask = batch['chosen_mask']
+    rejected_ids = batch['rejected_ids']
+    rejected_mask = batch['rejected_mask']
+    
+    ref_c = ref_logprobs_batch['chosen']
+    ref_r = ref_logprobs_batch['rejected']
+    
+    B = chosen_ids.shape[0]
+    
+    # 2. Forward pass to get policy sequence log-probabilities
+    lp_c = policy_sequence_logprob(params, chosen_ids, chosen_mask)
+    lp_r = policy_sequence_logprob(params, rejected_ids, rejected_mask)
+    
+    # 3. Compute DPO margins and loss
+    margins = dpo_pair_margin(lp_c, lp_r, ref_c, ref_r, beta)
+    # Average softplus loss over the batch: log(1 + exp(-m))
+    loss = np.mean(np.logaddexp(0.0, -margins))
+    
+    # 4. Initialize zero-filled gradients dictionary
+    grads = {k: np.zeros_like(v) for k, v in params.items()}
+    
+    # 5. Compute per-example weights and accumulate gradients
+    # Weight formula: w_i = -sigmoid(-m_i) * beta / B
+    # Note: 1 / (1 + np.exp(margins)) is mathematically equivalent to sigmoid(-margins)
+    sig_neg_m = 1.0 / (1.0 + np.exp(margins))
+    weights = -sig_neg_m * beta / B
+    
+    for i in range(B):
+        w_i = weights[i]
+        
+        # Keep the 2D layout with length-1 batch slices [i:i+1]
+        g_chosen = sequence_logprob_grad(params, chosen_ids[i:i+1], chosen_mask[i:i+1])
+        g_rejected = sequence_logprob_grad(params, rejected_ids[i:i+1], rejected_mask[i:i+1])
+        
+        # Accumulate w_i * (g_chosen - g_rejected) into the tracking grads dict
+        for k in grads.keys():
+            grads[k] += w_i * (g_chosen[k] - g_rejected[k])
+            
+    return float(loss), grads
 
 # Step 18 - dpo_train_step (not yet solved)
 # TODO: implement
