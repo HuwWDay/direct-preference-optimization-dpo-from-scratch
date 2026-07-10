@@ -23,10 +23,21 @@ def softmax(logits, axis=-1):
     return exp / np.sum(exp, axis=axis, keepdims=True)
 
 # Step 3 - gather_token_logprobs
+import numpy as np
+
 def gather_token_logprobs(log_probs, token_ids):
-    # TODO: Extract the log-probability of each observed token from a full vocab log-prob tensor...
-    expand = token_ids[:,:,np.newaxis]
-    return np.take_along_axis(log_probs, expand, axis=-1).squeeze(-1)
+    """
+    Extracts the log-probability of each observed token from a full vocab log-prob tensor.
+    Handles both 1D arrays of shape (T,) and 2D batched arrays of shape (B, T).
+    """
+    # Use Ellipsis (...) to automatically grab all leading dimensions (works for both 1D and 2D)
+    expand = token_ids[..., np.newaxis]
+    
+    # Extract the target values along the vocabulary axis (-1)
+    gathered = np.take_along_axis(log_probs, expand, axis=-1)
+    
+    # Remove the trailing singleton vocabulary axis we added for take_along_axis
+    return gathered.squeeze(-1)
 
 # Step 4 - masked_sequence_logprob
 def masked_sequence_logprob(token_logprobs, mask):
@@ -168,8 +179,52 @@ def sample_preference_batch(pairs, batch_size, rng=None):
         
     return batch
 
-# Step 13 - freeze_reference_logprobs (not yet solved)
-# TODO: implement
+# Step 13 - freeze_reference_logprobs
+import numpy as np
+
+def freeze_reference_logprobs(ref_params, pairs):
+    """
+    Precomputes and freezes reference-model sequence log-probabilities 
+    for every chosen and rejected response in a preference dataset.
+    
+    Args:
+        ref_params: dict containing the frozen reference model parameter tensors.
+        pairs: list of dicts, where each dict contains:
+               'chosen_ids', 'rejected_ids', 'chosen_mask', 'rejected_mask'
+               
+    Returns:
+        frozen_logprobs: list of dicts strictly aligned with `pairs`, each containing:
+                         'chosen': scalar log-prob of the chosen response
+                         'rejected': scalar log-prob of the rejected response
+    """
+    frozen_logprobs = []
+    
+    for pair in pairs:
+        # Compute reference log-probability for the chosen sequence
+        ref_chosen_lp = policy_sequence_logprob(
+            ref_params, 
+            pair['chosen_ids'], 
+            pair['chosen_mask']
+        )
+        
+        # Compute reference log-probability for the rejected sequence
+        ref_rejected_lp = policy_sequence_logprob(
+            ref_params, 
+            pair['rejected_ids'], 
+            pair['rejected_mask']
+        )
+        
+        # Safely convert to ordinary Python floats to avoid dimension mismatches downstream
+        chosen_scalar = float(np.asarray(ref_chosen_lp).reshape(-1)[0])
+        rejected_scalar = float(np.asarray(ref_rejected_lp).reshape(-1)[0])
+        
+        # Append maintaining exact alignment and the target key schema ('chosen', 'rejected')
+        frozen_logprobs.append({
+            'chosen': chosen_scalar,
+            'rejected': rejected_scalar
+        })
+        
+    return frozen_logprobs
 
 # Step 14 - policy_reference_logratio (not yet solved)
 # TODO: implement
