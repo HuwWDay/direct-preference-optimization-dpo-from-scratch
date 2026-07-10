@@ -125,8 +125,48 @@ def build_preference_pairs(prompts, chosen_ids, rejected_ids, chosen_mask, rejec
         out.append(temp)
     return out
 
-# Step 12 - sample_preference_batch (not yet solved)
-# TODO: implement
+# Step 12 - sample_preference_batch
+import numpy as np
+
+def sample_preference_batch(pairs, batch_size, rng=None):
+    """
+    Samples a mini-batch of preference pairs and stacks their fields.
+    
+    Args:
+        pairs: list of dicts, where each dict contains:
+               'chosen_ids', 'rejected_ids', 'chosen_mask', 'rejected_mask'
+               and optionally 'prompt'.
+        batch_size: int, number of pairs to sample.
+        rng: optional np.random.Generator instance.
+        
+    Returns:
+        batch_dict: dict of stacked NumPy arrays with a leading batch dimension.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+        
+    n = len(pairs)
+    # Choose with replacement only if requested batch_size exceeds available dataset size
+    replace = batch_size > n
+    choices = rng.choice(n, size=batch_size, replace=replace)
+    
+    # Gather the sampled dictionary items
+    sampled_pairs = [pairs[idx] for idx in choices]
+    
+    # Stack the core sequence tracking matrices
+    batch = {
+        'chosen_ids': np.stack([p['chosen_ids'] for p in sampled_pairs], axis=0),
+        'rejected_ids': np.stack([p['rejected_ids'] for p in sampled_pairs], axis=0),
+        'chosen_mask': np.stack([p['chosen_mask'] for p in sampled_pairs], axis=0),
+        'rejected_mask': np.stack([p['rejected_mask'] for p in sampled_pairs], axis=0)
+    }
+    
+    # Check if 'prompt' exists in the first item to safely include it
+    if 'prompt' in sampled_pairs[0]:
+        # np.stack handles prompt text/token arrays cleanly
+        batch['prompt'] = np.stack([p['prompt'] for p in sampled_pairs], axis=0)
+        
+    return batch
 
 # Step 13 - freeze_reference_logprobs (not yet solved)
 # TODO: implement
