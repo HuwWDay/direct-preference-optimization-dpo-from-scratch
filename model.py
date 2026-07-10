@@ -335,8 +335,63 @@ def dpo_train_step(params, batch, ref_logprobs_batch, beta, learning_rate):
     
     return updated_params, metrics
 
-# Step 19 - train_dpo (not yet solved)
-# TODO: implement
+# Step 19 - train_dpo
+import numpy as np
+
+def train_dpo(params, pairs, ref_logprobs, beta, learning_rate, num_steps, batch_size, rng=None):
+    """
+    Executes the full DPO training loop over a given number of optimization steps.
+    
+    Args:
+        params: dict of initial policy parameters ('embed', 'W_out', 'b_out')
+        pairs: list of preference pair dicts
+        ref_logprobs: dict of arrays containing all precomputed reference log-probs
+        beta: float, the KL regularization temperature
+        learning_rate: float, SGD step size
+        num_steps: int, total training updates to run
+        batch_size: int, number of preference pairs per gradient step
+        rng: optional np.random.Generator instance
+        
+    Returns:
+        params: dict of optimized policy parameters
+        history: list of dicts recording training progress metrics
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+        
+    n = len(pairs)
+    replace = batch_size > n
+    history = []
+    
+    for step in range(num_steps):
+        # 1. Sample indices shared by pairs and reference log-probs
+        indices = rng.choice(n, size=batch_size, replace=replace)
+        
+        # 2. Extract and stack sequence batch data for these indices
+        sampled_pairs = [pairs[idx] for idx in indices]
+        batch = {
+            'chosen_ids': np.stack([p['chosen_ids'] for p in sampled_pairs], axis=0),
+            'rejected_ids': np.stack([p['rejected_ids'] for p in sampled_pairs], axis=0),
+            'chosen_mask': np.stack([p['chosen_mask'] for p in sampled_pairs], axis=0),
+            'rejected_mask': np.stack([p['rejected_mask'] for p in sampled_pairs], axis=0)
+        }
+        
+        # 3. Extract the aligned reference log-probs for the batch
+        ref_logprobs_batch = {
+            'chosen': ref_logprobs['chosen'][indices],
+            'rejected': ref_logprobs['rejected'][indices]
+        }
+        
+        # 4. Perform the DPO gradient update step
+        params, metrics = dpo_train_step(params, batch, ref_logprobs_batch, beta, learning_rate)
+        
+        # 5. Record step metrics
+        history.append({
+            'step': step,
+            'loss': float(metrics['loss'])
+        })
+        
+    return params, history
 
 # Step 20 - length_normalized_logprob (not yet solved)
 # TODO: implement
