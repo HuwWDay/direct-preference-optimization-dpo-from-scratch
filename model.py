@@ -433,8 +433,64 @@ def reward_margin_stats(policy_logprob_chosen, policy_logprob_rejected, ref_logp
     m = chosen - rejected 
     return {"mean_margin":float(np.mean(m)), "std_margin":float(np.std(m)), "frac_positive":float(np.mean((m > 0)))}
 
-# Step 26 - evaluate_dpo (not yet solved)
-# TODO: implement
+# Step 26 - evaluate_dpo
+import numpy as np
+
+def evaluate_dpo(params, pairs, ref_logprobs, beta):
+    # 1. Create four empty lists to collect log probabilities across the dataset
+    policy_chosen_list = []
+    policy_rejected_list = []
+    ref_chosen_list = []
+    ref_rejected_list = []
+    
+    # 2. Iterate through pairs and reference logprobs to extract data
+    for pair, ref in zip(pairs, ref_logprobs):
+        # Extract features from the current pair dict
+        c_ids, c_mask = pair["chosen_ids"], pair["chosen_mask"]
+        r_ids, r_mask = pair["rejected_ids"], pair["rejected_mask"]
+        
+        # Calculate policy log probabilities using params
+        p_chosen = policy_sequence_logprob(params, c_ids, c_mask)
+        p_rejected = policy_sequence_logprob(params, r_ids, r_mask)
+        
+        # Pull reference log probabilities from the matching ref dictionary
+        r_chosen = ref["chosen"]
+        r_rejected = ref["rejected"]
+        
+        # Append to respective lists
+        policy_chosen_list.append(p_chosen)
+        policy_rejected_list.append(p_rejected)
+        ref_chosen_list.append(r_chosen)
+        ref_rejected_list.append(r_rejected)
+        
+    # 3. Convert the four collected lists into NumPy arrays of floats
+    p_chosen_arr = np.array(policy_chosen_list, dtype=float)
+    p_rejected_arr = np.array(policy_rejected_list, dtype=float)
+    r_chosen_arr = np.array(ref_chosen_list, dtype=float)
+    r_rejected_arr = np.array(ref_rejected_list, dtype=float)
+    
+    # 4. Compute core metrics using the provided functions
+    # Calculate DPO loss and preference accuracy
+    loss = dpo_loss(p_chosen_arr, p_rejected_arr, r_chosen_arr, r_rejected_arr, beta)
+    accuracy = preference_accuracy(p_chosen_arr, p_rejected_arr, r_chosen_arr, r_rejected_arr, beta)
+    
+    # Concatenate chosen and rejected arrays to calculate KL divergence over all sequences
+    p_all = np.concatenate([p_chosen_arr, p_rejected_arr])
+    r_all = np.concatenate([r_chosen_arr, r_rejected_arr])
+    kl_div = kl_to_reference(p_all, r_all)
+    
+    # Compute reward margin statistics
+    stats = reward_margin_stats(p_chosen_arr, p_rejected_arr, r_chosen_arr, r_rejected_arr, beta)
+    
+    # 5. Unpack stats and build the finalized 6-key dictionary of Python floats
+    return {
+        "dpo_loss": float(loss),
+        "preference_accuracy": float(accuracy),
+        "kl_to_reference": float(kl_div),
+        "mean_margin": float(stats["mean_margin"]),
+        "std_margin": float(stats["std_margin"]),
+        "frac_positive": float(stats["frac_positive"])
+    }
 
 # Step 27 - run_dpo_pipeline (not yet solved)
 # TODO: implement
