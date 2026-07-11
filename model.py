@@ -419,8 +419,11 @@ def preference_accuracy(policy_logprob_chosen, policy_logprob_rejected, ref_logp
     rejected = implicit_reward(policy_logprob_rejected, ref_logprob_rejected, beta)
     return reward_accuracy(chosen, rejected)
 
-# Step 24 - kl_to_reference (not yet solved)
-# TODO: implement
+# Step 24 - kl_to_reference
+def kl_to_reference(policy_logprob, reference_logprob):
+    # TODO: Estimate the mean KL divergence of the policy from the reference...
+    diff = policy_reference_logratio(policy_logprob, reference_logprob)
+    return float(np.mean(diff))
 
 # Step 25 - reward_margin_stats (not yet solved)
 # TODO: implement
