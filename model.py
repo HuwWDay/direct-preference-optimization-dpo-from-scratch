@@ -425,8 +425,13 @@ def kl_to_reference(policy_logprob, reference_logprob):
     diff = policy_reference_logratio(policy_logprob, reference_logprob)
     return float(np.mean(diff))
 
-# Step 25 - reward_margin_stats (not yet solved)
-# TODO: implement
+# Step 25 - reward_margin_stats
+def reward_margin_stats(policy_logprob_chosen, policy_logprob_rejected, ref_logprob_chosen, ref_logprob_rejected, beta):
+    # TODO: Summarize implicit-reward margins with mean, std, and frac positive.
+    chosen = implicit_reward(policy_logprob_chosen, ref_logprob_chosen, beta)
+    rejected = implicit_reward(policy_logprob_rejected, ref_logprob_rejected, beta)
+    m = chosen - rejected 
+    return {"mean_margin":float(np.mean(m)), "std_margin":float(np.std(m)), "frac_positive":float(np.mean((m > 0)))}
 
 # Step 26 - evaluate_dpo (not yet solved)
 # TODO: implement
