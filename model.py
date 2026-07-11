@@ -492,6 +492,48 @@ def evaluate_dpo(params, pairs, ref_logprobs, beta):
         "frac_positive": float(stats["frac_positive"])
     }
 
-# Step 27 - run_dpo_pipeline (not yet solved)
-# TODO: implement
+# Step 27 - run_dpo_pipeline
+import numpy as np
+
+def run_dpo_pipeline(vocab_size, d_model, prompts, chosen_ids, rejected_ids, chosen_mask, rejected_mask, beta, learning_rate, num_steps, batch_size, rng=None):
+    # 1. Create or accept an rng
+    if rng is None:
+        rng = np.random.default_rng()
+        
+    # 2. Initialize the policy network parameters
+    params = init_policy_params(vocab_size, d_model, rng=rng)
+    
+    # 3. Restructure raw parallel arrays into a list of unified pair dictionaries
+    pairs = build_preference_pairs(prompts, chosen_ids, rejected_ids, chosen_mask, rejected_mask)
+    
+    # 4. Compute frozen reference log probabilities using initial model state
+    ref_logprobs_list = freeze_reference_logprobs(params, pairs)
+    
+    # 5. Restructure the list of dicts into the dict-of-arrays layout expected by train_dpo
+    ref_logprobs_dict = {
+        'chosen': np.asarray([r['chosen'] for r in ref_logprobs_list], dtype=float),
+        'rejected': np.asarray([r['rejected'] for r in ref_logprobs_list], dtype=float)
+    }
+    
+    # 6. Execute the optimization loop over the dataset
+    updated_params, history = train_dpo(
+        params, 
+        pairs, 
+        ref_logprobs_dict, 
+        beta, 
+        learning_rate, 
+        num_steps, 
+        batch_size, 
+        rng=rng
+    )
+    
+    # 7. Evaluate post-training model metrics using the original list structure
+    eval_metrics = evaluate_dpo(updated_params, pairs, ref_logprobs_list, beta)
+    
+    # 8. Return final outputs
+    return {
+        'params': updated_params, 
+        'history': history, 
+        'eval_metrics': eval_metrics
+    }
 
